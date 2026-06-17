@@ -4,21 +4,7 @@
 #include <ctime>
 #include <graphics.h>
 #include <windows.h>
-#include <commdlg.h>
-#pragma comment(lib, "comdlg32.lib")
 using namespace std;
-
-// ===================== 工具函数：获取exe所在绝对目录 =====================
-wstring GetExeDir() {
-    wchar_t path[MAX_PATH] = { 0 };
-    GetModuleFileNameW(NULL, path, MAX_PATH);
-    wstring strPath(path);
-    size_t pos = strPath.find_last_of(L"\\/");
-    if (pos != wstring::npos) {
-        return strPath.substr(0, pos);
-    }
-    return L".";
-}
 
 // ===================== 1. 拼图块实体类 =====================
 class Piece {
@@ -246,7 +232,6 @@ private:
     int boardX, boardY;
     // 主菜单按钮
     int btnStartX, btnStartY, btnStartW, btnStartH;
-    int btnSelectImgX, btnSelectImgY, btnSelectImgW, btnSelectImgH;
     int btnDiff1X, btnDiff1Y, btnDiffW, btnDiffH;
     int btnDiff2X, btnDiff2Y;
     int btnDiff3X, btnDiff3Y;
@@ -259,20 +244,17 @@ public:
         boardX = 70;
         boardY = 80;
 
-        // 主菜单按钮坐标
+        // 主菜单开始按钮坐标
         btnStartW = 200; btnStartH = 50;
         btnStartX = (winW - btnStartW) / 2;
         btnStartY = 180;
 
-        btnSelectImgW = 200; btnSelectImgH = 40;
-        btnSelectImgX = (winW - btnSelectImgW) / 2;
-        btnSelectImgY = 250;
-
+        // 难度按钮坐标（已上移优化布局）
         btnDiffW = 100; btnDiffH = 40;
         btnDiff1X = winW / 2 - 160;
         btnDiff2X = winW / 2 - 50;
         btnDiff3X = winW / 2 + 60;
-        btnDiff1Y = btnDiff2Y = btnDiff3Y = 330;
+        btnDiff1Y = btnDiff2Y = btnDiff3Y = 280;
 
         // 游戏内按钮坐标
         btnPreviewW = 120; btnPreviewH = 35;
@@ -288,7 +270,8 @@ public:
     }
 
     // 绘制主菜单
-    void drawMenu(int selectDiff, wstring curImgName) const {
+    void drawMenu(int selectDiff) const {
+        // 绘制标题
         settextstyle(48, 0, L"微软雅黑");
         settextcolor(RGB(50, 50, 80));
         setbkmode(TRANSPARENT);
@@ -296,7 +279,7 @@ public:
         int tx = (winW - textwidth(title.c_str())) / 2;
         outtextxy(tx, 80, title.c_str());
 
-        // 开始游戏按钮
+        // 绘制开始游戏按钮
         setfillcolor(RGB(100, 180, 255));
         solidroundrect(btnStartX, btnStartY, btnStartX + btnStartW, btnStartY + btnStartH, 8, 8);
         settextstyle(24, 0, L"微软雅黑");
@@ -306,30 +289,13 @@ public:
         int ty = btnStartY + (btnStartH - textheight(startStr.c_str())) / 2;
         outtextxy(tx, ty, startStr.c_str());
 
-        // 选择图片按钮
-        setfillcolor(RGB(180, 220, 180));
-        solidroundrect(btnSelectImgX, btnSelectImgY, btnSelectImgX + btnSelectImgW, btnSelectImgY + btnSelectImgH, 6, 6);
-        settextstyle(18, 0, L"微软雅黑");
-        settextcolor(BLACK);
-        wstring imgStr = L"选择拼图图片";
-        tx = btnSelectImgX + (btnSelectImgW - textwidth(imgStr.c_str())) / 2;
-        ty = btnSelectImgY + (btnSelectImgH - textheight(imgStr.c_str())) / 2;
-        outtextxy(tx, ty, imgStr.c_str());
-
-        // 显示当前图片名称
-        settextstyle(14, 0, L"微软雅黑");
-        settextcolor(RGB(100, 100, 100));
-        wstring tip = L"当前图片：" + curImgName;
-        tx = (winW - textwidth(tip.c_str())) / 2;
-        outtextxy(tx, btnSelectImgY + btnSelectImgH + 10, tip.c_str());
-
         // 难度选择标题
         settextstyle(20, 0, L"微软雅黑");
         settextcolor(RGB(60, 60, 60));
         wstring diffTitle = L"选择难度：";
-        outtextxy(winW / 2 - 160, 300, diffTitle.c_str());
+        outtextxy(winW / 2 - 160, 250, diffTitle.c_str());
 
-        // 三个难度按钮
+        // 绘制三个难度按钮
         wstring diffTexts[] = { L"简单 3×3", L"中等 4×4", L"困难 5×5" };
         for (int i = 0; i < 3; i++) {
             int x = (i == 0) ? btnDiff1X : (i == 1 ? btnDiff2X : btnDiff3X);
@@ -386,9 +352,6 @@ public:
         if (mx >= btnStartX && mx <= btnStartX + btnStartW &&
             my >= btnStartY && my <= btnStartY + btnStartH)
             return 1;
-        if (mx >= btnSelectImgX && mx <= btnSelectImgX + btnSelectImgW &&
-            my >= btnSelectImgY && my <= btnSelectImgY + btnSelectImgH)
-            return 5;
         if (my >= btnDiff1Y && my <= btnDiff1Y + btnDiffH) {
             if (mx >= btnDiff1X && mx <= btnDiff1X + btnDiffW) return 2;
             if (mx >= btnDiff2X && mx <= btnDiff2X + btnDiffW) return 3;
@@ -428,35 +391,6 @@ private:
     int curRows, curCols;
     wstring curImgPath;
 
-    wstring getImgFileName() const {
-        size_t pos = curImgPath.find_last_of(L"\\/");
-        if (pos == wstring::npos) return curImgPath;
-        return curImgPath.substr(pos + 1);
-    }
-
-    // 文件选择框默认打开exe同级的images文件夹
-    bool openImageDialog() {
-        wchar_t filePath[MAX_PATH] = { 0 };
-        OPENFILENAMEW ofn = { 0 };
-        ofn.lStructSize = sizeof(ofn);
-        ofn.hwndOwner = GetHWnd();
-        ofn.lpstrFilter = L"图片文件 (*.jpg;*.jpeg;*.png)\0*.jpg;*.jpeg;*.png\0所有文件 (*.*)\0*.*\0";
-        ofn.lpstrFile = filePath;
-        ofn.nMaxFile = MAX_PATH;
-        ofn.lpstrTitle = L"选择一张拼图图片";
-        ofn.Flags = OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST;
-
-        // 用exe绝对路径拼接images目录
-        wstring initDir = GetExeDir() + L"\\images";
-        ofn.lpstrInitialDir = initDir.c_str();
-
-        if (GetOpenFileNameW(&ofn)) {
-            curImgPath = filePath;
-            return true;
-        }
-        return false;
-    }
-
     void updateDifficulty() {
         switch (curDiff) {
         case 1: curRows = 3; curCols = 3; break;
@@ -483,7 +417,7 @@ public:
         curDiff = 1;
         curRows = 3;
         curCols = 3;
-        curImgPath = L"puzzle.jpg";
+        curImgPath = L"puzzle.jpg"; // 默认拼图图片路径
     }
 
     void startGame() {
@@ -511,7 +445,6 @@ public:
             int res = uiMgr.checkMenuClick(x, y);
             if (res == 1) startGame();
             else if (res >= 2 && res <= 4) curDiff = res - 1;
-            else if (res == 5) openImageDialog();
             return;
         }
 
@@ -541,7 +474,7 @@ public:
     void render() {
         uiMgr.drawBackground();
         if (!isPlaying) {
-            uiMgr.drawMenu(curDiff, getImgFileName());
+            uiMgr.drawMenu(curDiff);
         }
         else {
             uiMgr.drawGameStatus(steps, timer.getTimeString());
